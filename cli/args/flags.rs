@@ -121,6 +121,17 @@ pub struct FmtFlags {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct GenerateFlags {
+  pub files: Vec<PathBuf>,
+  pub ignore: Vec<PathBuf>,
+  pub run: Vec<String>,
+  pub skip: Vec<String>,
+  pub dry_run: bool,
+  pub verbose: bool,
+  pub trace: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct InitFlags {
   pub dir: Option<String>,
 }
@@ -224,6 +235,7 @@ pub enum DenoSubcommand {
   Doc(DocFlags),
   Eval(EvalFlags),
   Fmt(FmtFlags),
+  Generate(GenerateFlags),
   Init(InitFlags),
   Info(InfoFlags),
   Install(InstallFlags),
@@ -594,6 +606,7 @@ pub fn flags_from_vec(args: Vec<String>) -> clap::Result<Flags> {
     Some(("doc", m)) => doc_parse(&mut flags, m),
     Some(("eval", m)) => eval_parse(&mut flags, m),
     Some(("fmt", m)) => fmt_parse(&mut flags, m),
+    Some(("generate", m)) => generate_parse(&mut flags, m),
     Some(("init", m)) => init_parse(&mut flags, m),
     Some(("info", m)) => info_parse(&mut flags, m),
     Some(("install", m)) => install_parse(&mut flags, m),
@@ -675,6 +688,7 @@ fn clap_root(version: &str) -> Command {
     .subcommand(doc_subcommand())
     .subcommand(eval_subcommand())
     .subcommand(fmt_subcommand())
+    .subcommand(generate_subcommand())
     .subcommand(init_subcommand())
     .subcommand(info_subcommand())
     .subcommand(install_subcommand())
@@ -1193,6 +1207,34 @@ Ignore formatting a file by adding an ignore comment at the top of the file:
         .takes_value(true)
         .possible_values(["always", "never", "preserve"])
         .help("Define how prose should be wrapped. Defaults to always."),
+    )
+}
+
+fn generate_subcommand<'a>() -> Command<'a> {
+  compile_args(Command::new("generate"))
+    .arg(
+      Arg::new("source_file")
+        .takes_value(true)
+        .required(true)
+        .value_hint(ValueHint::FilePath),
+    )
+    .arg(
+      Arg::new("out_file")
+        .takes_value(true)
+        .required(false)
+        .value_hint(ValueHint::FilePath),
+    )
+    .arg(watch_arg(false))
+    .arg(no_clear_screen_arg())
+    .about("Bundle module and dependencies into single file")
+    .long_about(
+      "Output a single JavaScript file with all dependencies.
+
+  deno bundle https://deno.land/std/examples/colors.ts colors.bundle.js
+
+If no output file is given, the output is written to standard output:
+
+  deno bundle https://deno.land/std/examples/colors.ts",
     )
 }
 
