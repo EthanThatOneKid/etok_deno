@@ -94,6 +94,12 @@ async fn run_subcommand(flags: Flags) -> Result<i32, AnyError> {
       tools::fmt::format(cli_options, fmt_options).await?;
       Ok(0)
     }
+    // Inspired by:
+    // https://github.com/golang/go/blob/2b807e1d7b00a26aa6a26fa47129bac3f711e5f5/src/cmd/go/internal/generate/generate.go#L33
+    DenoSubcommand::Generate(generate_flags) => {
+      tools::generate::generate(flags, generate_flags).await?;
+      Ok(0)
+    }
     DenoSubcommand::Init(init_flags) => {
       tools::init::init_project(init_flags).await?;
       Ok(0)

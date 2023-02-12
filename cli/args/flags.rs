@@ -134,6 +134,29 @@ pub struct FmtFlags {
   pub no_semicolons: Option<bool>,
 }
 
+// Automate common code generation tasks by running procedures described by directives
+// within JavaScript/TypeScript source code.
+// -r, --run <REGEX>
+// Run only generators whose name matches the given regular expression.
+// -s, --skip <REGEX>
+// Skip generators whose name matches the given regular expression.
+// -v, --verbose
+// Prints the module specifier and directive text of each directive when
+// running the corresponding generator.
+// -n, --dry-run
+// Do not run any generators. Useful for testing.
+// -t, --trace
+// Prints a detailed trace of the execution of each generator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GenerateFlags {
+  pub files: FileFlags,
+  pub run: Option<String>,
+  pub skip: Option<String>,
+  pub verbose: bool,
+  pub dry_run: bool,
+  pub trace: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InitFlags {
   pub dir: Option<String>,
@@ -236,6 +259,7 @@ pub enum DenoSubcommand {
   Doc(DocFlags),
   Eval(EvalFlags),
   Fmt(FmtFlags),
+  Generate(GenerateFlags),
   Init(InitFlags),
   Info(InfoFlags),
   Install(InstallFlags),
@@ -1233,6 +1257,193 @@ Ignore formatting a file by adding an ignore comment at the top of the file:
       Arg::new("no-semicolons")
         .long("no-semicolons")
         .alias("options-no-semicolons")
+        .min_values(0)
+        .max_values(1)
+        .takes_value(true)
+        .require_equals(true)
+        .possible_values(["true", "false"])
+        .help("Don't use semicolons except where necessary."),
+    )
+}
+
+fn generate_subcommand<'a>() -> Command<'a> {
+  Command::new("generate")
+    .about("Generate code or assets")
+    .long_about(
+      "Automate code generation by running procedures defined in comment annotations.
+
+  deno generate myfile1.ts
+  deno generate myfile1.ts myfile2.ts
+  deno generate myfile1.ts --dry-run
+
+Deno generate scans a module graph for directives, which are lines of comments of the
+form:
+
+  //deno:generate <command> [arguments...]
+
+where command is the generator corresponding to an executable file that can be run locally.
+To run and arguments are passed to the generator. The generator is run from the directory
+containing the directive. The generator is run via the Deno.run() API, so it can be a
+Deno script or an executable binary.
+
+Note: No space in between \"//\" and \"deno:generate\".
+
+The deno generate command does not parse the file, so lines that look like directives
+in comments or strings will be treated as directives.
+
+The arguments to the directive are space-separated tokens or double-quoted strings passed
+to the generator as arguments. Quoted strings are evaluated before execution.
+
+To convey to humans and tools that code is generated, generated source files should have a
+comment of the form:
+
+  ^// Code generated .* DO NOT EDIT\\.$
+
+The line must appear before the first non-comment, non-blank line of the file.
+Deno generate sets several variables when running generators:
+ 
+  $DENO_OS
+    The operating system of the host running deno generate.
+  $DENO_MODULE
+    The module specifier of the module containing the directive.
+  $DENO_LINE
+    The line number of the directive within the file.
+  $DENO_CHARACTER
+    The character number of the directive within the file.
+  $DENO_DIR
+    The directory containing the file containing the directive.
+  $DOLLAR
+    A dollar sign ($). This is useful for escaping the $ in shell commands.
+    Literature: https://go-review.googlesource.com/c/go/+/8091
+  
+A directive may contain a comment of the form:
+
+  //deno:generate -command <command> [arguments...]
+
+where, for the remainder of this source file, the command <command> is replaced by the
+arguments. This can be used to create aliases for long commands or to define arguments
+that are common to multiple directives. For example:
+
+  //deno:generate -command cat deno run --allow-read https://deno.land/std/examples/cat.ts
+
+  (...)
+
+  //deno:generate cat LICENSE
+
+The -command directive may appear anywhere in the file, but it is usually placed at the
+top of the file, before any directives that use it.
+
+The -run flag specifies a regular expression to select directives to run by matching
+against the directive text as-is. The regular expression does not need to match the entire
+text of the directive, but it must match at least one character. The default is to run
+all directives.
+
+The -skip flag specifies a regular expression to select directives to skip by matching
+against the directive text as-is. The regular expression does not need to match the entire
+text of the directive, but it must match at least one character. The default is to not
+skip any directives.
+
+The -dry-run flag (-n) prints the commands that would be run without actually running them.
+
+The -verbose flag (-v) prints the module specifier and directive text of each directive when
+running the corresponding generator.
+
+The -trace flag (-x) prints the commands as they are run.
+
+You can also combine these flags to modify go generate's behavior in different ways. For
+example, deno generate -n -v mod.ts will run generate in dry run mode and print more
+detailed information about the commands that it would run, while deno generate -v -x
+will run generate in verbose mode and print the commands that it is running as it runs them.",
+    )
+    .arg(config_arg())
+    .arg(no_config_arg())
+    .arg(
+      Arg::new("check")
+        .long("check")
+        .help("Check if the source files are formatted")
+        .takes_value(false),
+    )
+    .arg(
+      Arg::new("ext")
+        .long("ext")
+        .help("Set standard input (stdin) content type")
+        .takes_value(true)
+        .default_value("ts")
+        .possible_values(["ts", "tsx", "js", "jsx", "md", "json", "jsonc"]),
+    )
+    .arg(
+      Arg::new("ignore")
+        .long("ignore")
+        .takes_value(true)
+        .use_value_delimiter(true)
+        .require_equals(true)
+        .help("Ignore formatting particular source files")
+        .value_hint(ValueHint::AnyPath),
+    )
+    .arg(
+      Arg::new("files")
+        .takes_value(true)
+        .multiple_values(true)
+        .multiple_occurrences(true)
+        .required(false)
+        .value_hint(ValueHint::AnyPath),
+    )
+    .arg(watch_arg(false))
+    .arg(no_clear_screen_arg())
+    .arg(
+      Arg::new("options-use-tabs")
+        .long("options-use-tabs")
+        .takes_value(true)
+        .min_values(0)
+        .max_values(1)
+        .require_equals(true)
+        .possible_values(["true", "false"])
+        .help("Use tabs instead of spaces for indentation. Defaults to false."),
+    )
+    .arg(
+      Arg::new("options-line-width")
+        .long("options-line-width")
+        .help("Define maximum line width. Defaults to 80.")
+        .takes_value(true)
+        .validator(|val: &str| match val.parse::<NonZeroUsize>() {
+          Ok(_) => Ok(()),
+          Err(_) => {
+            Err("options-line-width should be a non zero integer".to_string())
+          }
+        }),
+    )
+    .arg(
+      Arg::new("options-indent-width")
+        .long("options-indent-width")
+        .help("Define indentation width. Defaults to 2.")
+        .takes_value(true)
+        .validator(|val: &str| match val.parse::<NonZeroUsize>() {
+          Ok(_) => Ok(()),
+          Err(_) => {
+            Err("options-indent-width should be a non zero integer".to_string())
+          }
+        }),
+    )
+    .arg(
+      Arg::new("options-single-quote")
+        .long("options-single-quote")
+        .min_values(0)
+        .max_values(1)
+        .takes_value(true)
+        .require_equals(true)
+        .possible_values(["true", "false"])
+        .help("Use single quotes. Defaults to false."),
+    )
+    .arg(
+      Arg::new("options-prose-wrap")
+        .long("options-prose-wrap")
+        .takes_value(true)
+        .possible_values(["always", "never", "preserve"])
+        .help("Define how prose should be wrapped. Defaults to always."),
+    )
+    .arg(
+      Arg::new("options-no-semicolons")
+        .long("options-no-semicolons")
         .min_values(0)
         .max_values(1)
         .takes_value(true)

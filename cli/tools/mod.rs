@@ -6,6 +6,7 @@ pub mod check;
 pub mod coverage;
 pub mod doc;
 pub mod fmt;
+pub mod generate;
 pub mod info;
 pub mod init;
 pub mod installer;

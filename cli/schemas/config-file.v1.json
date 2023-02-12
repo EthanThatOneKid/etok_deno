@@ -353,6 +353,11 @@
         }
       }
     },
+    "generate": {
+      "description": "Configuration for deno task",
+      "type": "object"
+      // TODO: add schema for generate
+    },
     "tasks": {
       "description": "Configuration for deno task",
       "type": "object",
