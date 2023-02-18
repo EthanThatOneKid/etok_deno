@@ -54,6 +54,7 @@ pub struct FileFlags {
 pub struct BenchFlags {
   pub files: FileFlags,
   pub filter: Option<String>,
+  pub json: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,27 +135,15 @@ pub struct FmtFlags {
   pub no_semicolons: Option<bool>,
 }
 
-// Automate common code generation tasks by running procedures described by directives
-// within JavaScript/TypeScript source code.
-// -r, --run <REGEX>
-// Run only generators whose name matches the given regular expression.
-// -s, --skip <REGEX>
-// Skip generators whose name matches the given regular expression.
-// -v, --verbose
-// Prints the module specifier and directive text of each directive when
-// running the corresponding generator.
-// -n, --dry-run
-// Do not run any generators. Useful for testing.
-// -t, --trace
-// Prints a detailed trace of the execution of each generator.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GenerateFlags {
+  pub source_file: String,
   pub files: FileFlags,
   pub run: Option<String>,
   pub skip: Option<String>,
-  pub verbose: bool,
-  pub dry_run: bool,
-  pub trace: bool,
+  pub verbose: Option<bool>,
+  pub dry_run: Option<bool>,
+  pub trace: Option<bool>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -640,6 +629,7 @@ pub fn flags_from_vec(args: Vec<String>) -> clap::Result<Flags> {
     Some(("doc", m)) => doc_parse(&mut flags, m),
     Some(("eval", m)) => eval_parse(&mut flags, m),
     Some(("fmt", m)) => fmt_parse(&mut flags, m),
+    Some(("generate", m)) => generate_parse(&mut flags, m),
     Some(("init", m)) => init_parse(&mut flags, m),
     Some(("info", m)) => info_parse(&mut flags, m),
     Some(("install", m)) => install_parse(&mut flags, m),
@@ -721,6 +711,7 @@ fn clap_root(version: &str) -> Command {
     .subcommand(doc_subcommand())
     .subcommand(eval_subcommand())
     .subcommand(fmt_subcommand())
+    .subcommand(generate_subcommand())
     .subcommand(init_subcommand())
     .subcommand(info_subcommand())
     .subcommand(install_subcommand())
@@ -741,6 +732,12 @@ fn clap_root(version: &str) -> Command {
 fn bench_subcommand<'a>() -> Command<'a> {
   runtime_args(Command::new("bench"), true, false)
     .trailing_var_arg(true)
+    .arg(
+      Arg::new("json")
+        .long("json")
+        .help("UNSTABLE: Output benchmark result in JSON format")
+        .takes_value(false),
+    )
     .arg(
       Arg::new("ignore")
         .long("ignore")
@@ -784,6 +781,7 @@ glob {*_,*.,}bench.{js,mjs,ts,mts,jsx,tsx}:
 
 fn bundle_subcommand<'a>() -> Command<'a> {
   compile_args(Command::new("bundle"))
+    .hide(true)
     .arg(
       Arg::new("source_file")
         .takes_value(true)
@@ -1355,102 +1353,54 @@ example, deno generate -n -v mod.ts will run generate in dry run mode and print 
 detailed information about the commands that it would run, while deno generate -v -x
 will run generate in verbose mode and print the commands that it is running as it runs them.",
     )
-    .arg(config_arg())
-    .arg(no_config_arg())
-    .arg(
-      Arg::new("check")
-        .long("check")
-        .help("Check if the source files are formatted")
-        .takes_value(false),
-    )
-    .arg(
-      Arg::new("ext")
-        .long("ext")
-        .help("Set standard input (stdin) content type")
-        .takes_value(true)
-        .default_value("ts")
-        .possible_values(["ts", "tsx", "js", "jsx", "md", "json", "jsonc"]),
-    )
-    .arg(
-      Arg::new("ignore")
-        .long("ignore")
-        .takes_value(true)
-        .use_value_delimiter(true)
-        .require_equals(true)
-        .help("Ignore formatting particular source files")
-        .value_hint(ValueHint::AnyPath),
-    )
+    .trailing_var_arg(true)
+    .arg(script_arg().required(true))
     .arg(
       Arg::new("files")
+        .about("Files to run")
         .takes_value(true)
         .multiple_values(true)
         .multiple_occurrences(true)
         .required(false)
         .value_hint(ValueHint::AnyPath),
     )
-    .arg(watch_arg(false))
-    .arg(no_clear_screen_arg())
     .arg(
-      Arg::new("options-use-tabs")
-        .long("options-use-tabs")
-        .takes_value(true)
-        .min_values(0)
-        .max_values(1)
-        .require_equals(true)
-        .possible_values(["true", "false"])
-        .help("Use tabs instead of spaces for indentation. Defaults to false."),
+      Arg::new("dry-run")
+        .short('n')
+        .long("dry-run")
+        .alias("dryrun")
+        .about("Print the commands that would be run without actually running them"),
     )
     .arg(
-      Arg::new("options-line-width")
-        .long("options-line-width")
-        .help("Define maximum line width. Defaults to 80.")
-        .takes_value(true)
-        .validator(|val: &str| match val.parse::<NonZeroUsize>() {
-          Ok(_) => Ok(()),
-          Err(_) => {
-            Err("options-line-width should be a non zero integer".to_string())
-          }
-        }),
+      Arg::new("verbose")
+        .short('v')
+        .long("verbose")
+        .about("Print the module specifier and directive text of each directive when running the corresponding generator"),
     )
     .arg(
-      Arg::new("options-indent-width")
-        .long("options-indent-width")
-        .help("Define indentation width. Defaults to 2.")
-        .takes_value(true)
-        .validator(|val: &str| match val.parse::<NonZeroUsize>() {
-          Ok(_) => Ok(()),
-          Err(_) => {
-            Err("options-indent-width should be a non zero integer".to_string())
-          }
-        }),
+      Arg::new("trace")
+        .short('x')
+        .long("trace")
+        .about("Print the commands as they are run"),
     )
     .arg(
-      Arg::new("options-single-quote")
-        .long("options-single-quote")
-        .min_values(0)
-        .max_values(1)
+      Arg::new("run")
+        .long("run")
         .takes_value(true)
-        .require_equals(true)
-        .possible_values(["true", "false"])
-        .help("Use single quotes. Defaults to false."),
+        .value_hint(ValueHint::Other)
+        .about("A regular expression to select directives to run by matching against the directive text as-is"),
     )
     .arg(
-      Arg::new("options-prose-wrap")
-        .long("options-prose-wrap")
+      Arg::new("skip")
+        .long("skip")
         .takes_value(true)
-        .possible_values(["always", "never", "preserve"])
-        .help("Define how prose should be wrapped. Defaults to always."),
+        .value_hint(ValueHint::Other)
+        .about("A regular expression to select directives to skip by matching against the directive text as-is"),
     )
-    .arg(
-      Arg::new("options-no-semicolons")
-        .long("options-no-semicolons")
-        .min_values(0)
-        .max_values(1)
-        .takes_value(true)
-        .require_equals(true)
-        .possible_values(["true", "false"])
-        .help("Don't use semicolons except where necessary."),
-    )
+    .arg(no_config_arg())
+    .arg(config_arg())
+    .arg(import_map_arg())
+    .arg(lock_arg())
 }
 
 fn init_subcommand<'a>() -> Command<'a> {
@@ -2536,6 +2486,8 @@ fn bench_parse(flags: &mut Flags, matches: &clap::ArgMatches) {
   // interactive prompts, unless done by user code
   flags.no_prompt = true;
 
+  let json = matches.is_present("json");
+
   let ignore = match matches.values_of("ignore") {
     Some(f) => f.map(PathBuf::from).collect(),
     None => vec![],
@@ -2570,6 +2522,7 @@ fn bench_parse(flags: &mut Flags, matches: &clap::ArgMatches) {
   flags.subcommand = DenoSubcommand::Bench(BenchFlags {
     files: FileFlags { include, ignore },
     filter,
+    json,
   });
 }
 
@@ -2814,6 +2767,46 @@ fn optional_bool_parse(matches: &ArgMatches, name: &str) -> Option<bool> {
   } else {
     None
   }
+}
+
+fn generate_parse(flags: &mut Flags, matches: &clap::ArgMatches) {
+  config_args_parse(flags, matches);
+  import_map_arg_parse(flags, matches);
+
+  let mut script: Vec<String> = matches
+    .values_of("script_arg")
+    .unwrap()
+    .map(String::from)
+    .collect();
+  assert!(!script.is_empty());
+  let args = script.split_off(1);
+  let source_file = script[0].to_string();
+
+  let include = match matches.values_of("files") {
+    Some(f) => f.map(PathBuf::from).collect(),
+    None => vec![],
+  };
+
+  let ignore = match matches.values_of("ignore") {
+    Some(f) => f.map(PathBuf::from).collect(),
+    None => vec![],
+  };
+
+  let run = matches.value_of("run").map(String::from);
+  let skip = matches.value_of("skip").map(String::from);
+  let verbose = optional_bool_parse(matches, "verbose");
+  let dry_run = optional_bool_parse(matches, "dry-run");
+  let trace = optional_bool_parse(matches, "trace");
+
+  flags.subcommand = DenoSubcommand::Generate(GenerateFlags {
+    source_file,
+    files: FileFlags { include, ignore },
+    run,
+    skip,
+    verbose,
+    dry_run,
+    trace,
+  });
 }
 
 fn init_parse(flags: &mut Flags, matches: &clap::ArgMatches) {
@@ -4070,6 +4063,40 @@ mod tests {
           single_quote: Some(false),
           prose_wrap: None,
           no_semicolons: Some(false),
+        }),
+        ..Flags::default()
+      }
+    );
+  }
+
+  #[test]
+  fn generate() {
+    let r = flags_from_vec(svec![
+      "deno",
+      "generate",
+      "foo.ts",
+      "--run",
+      "bar.ts",
+      "--skip",
+      "baz.ts",
+      "--verbose",
+      "--dry-run",
+      "--trace",
+    ]);
+    assert_eq!(
+      r.unwrap(),
+      Flags {
+        subcommand: DenoSubcommand::Generate(GenerateFlags {
+          source_file: "foo.ts".to_string(),
+          files: FileFlags {
+            include: vec![],
+            ignore: vec![],
+          },
+          run: Some("bar.ts".to_string()),
+          skip: Some("baz.ts".to_string()),
+          verbose: Some(true),
+          dry_run: Some(true),
+          trace: Some(true),
         }),
         ..Flags::default()
       }
@@ -6746,6 +6773,7 @@ mod tests {
     let r = flags_from_vec(svec![
       "deno",
       "bench",
+      "--json",
       "--unstable",
       "--filter",
       "- foo",
@@ -6763,6 +6791,7 @@ mod tests {
       Flags {
         subcommand: DenoSubcommand::Bench(BenchFlags {
           filter: Some("- foo".to_string()),
+          json: true,
           files: FileFlags {
             include: vec![PathBuf::from("dir1/"), PathBuf::from("dir2/")],
             ignore: vec![],
@@ -6787,6 +6816,7 @@ mod tests {
       Flags {
         subcommand: DenoSubcommand::Bench(BenchFlags {
           filter: None,
+          json: false,
           files: FileFlags {
             include: vec![],
             ignore: vec![],

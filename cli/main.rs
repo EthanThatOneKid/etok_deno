@@ -18,7 +18,6 @@ mod npm;
 mod ops;
 mod proc_state;
 mod resolver;
-mod semver;
 mod standalone;
 mod tools;
 mod tsc;
@@ -30,7 +29,7 @@ use crate::args::flags_from_vec;
 use crate::args::DenoSubcommand;
 use crate::args::Flags;
 use crate::proc_state::ProcState;
-use crate::resolver::CliResolver;
+use crate::resolver::CliGraphResolver;
 use crate::util::display;
 use crate::util::v8::get_v8_flags_from_env;
 use crate::util::v8::init_v8_flags;
@@ -94,8 +93,6 @@ async fn run_subcommand(flags: Flags) -> Result<i32, AnyError> {
       tools::fmt::format(cli_options, fmt_options).await?;
       Ok(0)
     }
-    // Inspired by:
-    // https://github.com/golang/go/blob/2b807e1d7b00a26aa6a26fa47129bac3f711e5f5/src/cmd/go/internal/generate/generate.go#L33
     DenoSubcommand::Generate(generate_flags) => {
       tools::generate::generate(flags, generate_flags).await?;
       Ok(0)

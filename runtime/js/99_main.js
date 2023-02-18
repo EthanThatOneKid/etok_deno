@@ -62,7 +62,6 @@ import { errors } from "internal:runtime/js/01_errors.js";
 import * as webidl from "internal:deno_webidl/00_webidl.js";
 import DOMException from "internal:deno_web/01_dom_exception.js";
 import * as flash from "internal:deno_flash/01_http.js";
-import * as spawn from "internal:runtime/js/40_spawn.js";
 import {
   mainRuntimeGlobalProperties,
   setLanguage,
@@ -265,6 +264,7 @@ function registerErrors() {
   core.registerErrorClass("InvalidData", errors.InvalidData);
   core.registerErrorClass("TimedOut", errors.TimedOut);
   core.registerErrorClass("Interrupted", errors.Interrupted);
+  core.registerErrorClass("WouldBlock", errors.WouldBlock);
   core.registerErrorClass("WriteZero", errors.WriteZero);
   core.registerErrorClass("UnexpectedEof", errors.UnexpectedEof);
   core.registerErrorClass("BadResource", errors.BadResource);
@@ -465,22 +465,12 @@ function bootstrapMainRuntime(runtimeOptions) {
   // a snapshot
   ObjectAssign(internals, {
     nodeUnstable: {
-      Command: spawn.createCommand(
-        spawn.createSpawn(ops.op_node_unstable_spawn_child),
-        spawn.createSpawnSync(
-          ops.op_node_unstable_spawn_sync,
-        ),
-        spawn.createSpawnChild(
-          ops.op_node_unstable_spawn_child,
-        ),
-      ),
       serve: flash.createServe(ops.op_node_unstable_flash_serve),
       upgradeHttpRaw: flash.upgradeHttpRaw,
       listenDatagram: net.createListenDatagram(
         ops.op_node_unstable_net_listen_udp,
         ops.op_node_unstable_net_listen_unixpacket,
       ),
-      osUptime: os.createOsUptime(ops.op_node_unstable_os_uptime),
     },
   });
 
@@ -512,17 +502,11 @@ function bootstrapMainRuntime(runtimeOptions) {
     // the op function that needs to be passed will be invalidated by creating
     // a snapshot
     ObjectAssign(finalDenoNs, {
-      Command: spawn.createCommand(
-        spawn.createSpawn(ops.op_spawn_child),
-        spawn.createSpawnSync(ops.op_spawn_sync),
-        spawn.createSpawnChild(ops.op_spawn_child),
-      ),
       serve: flash.createServe(ops.op_flash_serve),
       listenDatagram: net.createListenDatagram(
         ops.op_net_listen_udp,
         ops.op_net_listen_unixpacket,
       ),
-      osUptime: os.createOsUptime(ops.op_os_uptime),
     });
   }
 
@@ -531,6 +515,11 @@ function bootstrapMainRuntime(runtimeOptions) {
   ObjectDefineProperty(globalThis, "Deno", util.readOnly(finalDenoNs));
 
   util.log("args", runtimeOptions.args);
+
+  // FIXME(bartlomieju): this should be a helper function that is placed in
+  // "internals" namespace
+  // Initialize Node polyfills
+  // internals.__bootstrapNodeProcess();
 }
 
 function bootstrapWorkerRuntime(
@@ -610,22 +599,12 @@ function bootstrapWorkerRuntime(
   // a snapshot
   ObjectAssign(internals, {
     nodeUnstable: {
-      Command: spawn.createCommand(
-        spawn.createSpawn(ops.op_node_unstable_spawn_child),
-        spawn.createSpawnSync(
-          ops.op_node_unstable_spawn_sync,
-        ),
-        spawn.createSpawnChild(
-          ops.op_node_unstable_spawn_child,
-        ),
-      ),
       serve: flash.createServe(ops.op_node_unstable_flash_serve),
       upgradeHttpRaw: flash.upgradeHttpRaw,
       listenDatagram: net.createListenDatagram(
         ops.op_node_unstable_net_listen_udp,
         ops.op_node_unstable_net_listen_unixpacket,
       ),
-      osUptime: os.createOsUptime(ops.op_node_unstable_os_uptime),
     },
   });
 
@@ -649,17 +628,11 @@ function bootstrapWorkerRuntime(
     // the op function that needs to be passed will be invalidated by creating
     // a snapshot
     ObjectAssign(finalDenoNs, {
-      Command: spawn.createCommand(
-        spawn.createSpawn(ops.op_spawn_child),
-        spawn.createSpawnSync(ops.op_spawn_sync),
-        spawn.createSpawnChild(ops.op_spawn_child),
-      ),
       serve: flash.createServe(ops.op_flash_serve),
       listenDatagram: net.createListenDatagram(
         ops.op_net_listen_udp,
         ops.op_net_listen_unixpacket,
       ),
-      osUptime: os.createOsUptime(ops.op_os_uptime),
     });
   }
   ObjectDefineProperties(finalDenoNs, {
