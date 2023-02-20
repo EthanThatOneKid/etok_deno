@@ -841,14 +841,7 @@ impl JsRuntime {
           )
           .await?;
         let receiver = runtime.mod_evaluate(id);
-        poll_fn(|cx| {
-          let r = runtime.poll_event_loop(cx, false);
-          // TODO(bartlomieju): some code in readable-stream polyfill in `ext/node`
-          // is calling `nextTick()` during snapshotting, which causes infinite loop
-          runtime.state.borrow_mut().has_tick_scheduled = false;
-          r
-        })
-        .await?;
+        runtime.run_event_loop(false).await?;
         receiver.await?
       })
       .with_context(|| format!("Couldn't execute '{}'", file_source.specifier))
@@ -879,7 +872,7 @@ impl JsRuntime {
           realm.execute_script(
             self.v8_isolate(),
             &file_source.specifier,
-            file_source.code,
+            &file_source.code.load()?,
           )?;
         }
       }
