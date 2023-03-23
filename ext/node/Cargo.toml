@@ -2,7 +2,7 @@
 
 [package]
 name = "deno_node"
-version = "0.26.0"
+version = "0.31.1"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,9 +14,13 @@ description = "Node compatibility for Deno"
 path = "lib.rs"
 
 [dependencies]
+aes.workspace = true
+cbc.workspace = true
 deno_core.workspace = true
 digest = { version = "0.10.5", features = ["core-api", "std"] }
+hex.workspace = true
 idna = "0.3.0"
+indexmap.workspace = true
 md-5 = "0.10.5"
 md4 = "0.10.2"
 once_cell.workspace = true

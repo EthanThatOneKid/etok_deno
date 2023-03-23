@@ -9,6 +9,7 @@ use crate::http_util::HttpClient;
 use crate::proc_state::ProcState;
 use crate::util::progress_bar::ProgressBar;
 use crate::util::progress_bar::ProgressBarStyle;
+use crate::util::time;
 use crate::version;
 
 use deno_core::anyhow::bail;
@@ -60,7 +61,7 @@ impl RealUpdateCheckerEnvironment {
       http_client,
       cache_file_path,
       // cache the current time
-      current_time: chrono::Utc::now(),
+      current_time: time::utc_now(),
     }
   }
 }
@@ -378,7 +379,7 @@ pub async fn upgrade(
 
   log::info!("Deno is upgrading to version {}", &install_version);
 
-  let temp_dir = secure_tempfile::TempDir::new()?;
+  let temp_dir = tempfile::TempDir::new()?;
   let new_exe_path = unpack_into_dir(archive_data, cfg!(windows), &temp_dir)?;
   fs::set_permissions(&new_exe_path, permissions)?;
   check_exe(&new_exe_path)?;
@@ -475,7 +476,7 @@ async fn download_package(
 pub fn unpack_into_dir(
   archive_data: Vec<u8>,
   is_windows: bool,
-  temp_dir: &secure_tempfile::TempDir,
+  temp_dir: &tempfile::TempDir,
 ) -> Result<PathBuf, std::io::Error> {
   const EXE_NAME: &str = "deno";
   let temp_dir_path = temp_dir.path();
@@ -702,7 +703,7 @@ mod test {
         file_text: Default::default(),
         current_version: Default::default(),
         latest_version: Arc::new(Mutex::new(Ok("".to_string()))),
-        time: Arc::new(Mutex::new(chrono::Utc::now())),
+        time: Arc::new(Mutex::new(crate::util::time::utc_now())),
       }
     }
 
