@@ -1,3 +1,5 @@
+use deno_ast::swc::common::util::take::Take;
+
 use super::quoted_split::{is_space_byte, quoted_split};
 
 static GENERATE_COMMENT: &str = "//deno:generate";
@@ -6,34 +8,15 @@ static GENERATE_COMMENT: &str = "//deno:generate";
 /// comment in a source file.
 #[derive(Debug, PartialEq)]
 pub struct ParsedComment {
-  args: Vec<String>,
-  original: String,
-  alias: Option<String>,
-  line: usize,
-  character: usize,
+  pub args: Vec<String>,
+  pub original: String,
+  pub alias: Option<String>,
+  pub line: usize,
+  pub character: usize,
 }
 
+/// ParsedComment implements the CharLocation trait.
 impl ParsedComment {
-  pub fn args(&self) -> &[String] {
-    &self.args
-  }
-
-  pub fn original(&self) -> &str {
-    &self.original
-  }
-
-  pub fn alias(&self) -> Option<&str> {
-    self.alias.as_deref()
-  }
-
-  pub fn line(&self) -> usize {
-    self.line
-  }
-
-  pub fn character(&self) -> usize {
-    self.character
-  }
-
   pub fn command(&self) -> &str {
     self.args[0].as_str()
   }
@@ -42,26 +25,13 @@ impl ParsedComment {
     &self.args[1..]
   }
 
-  pub fn command_args_str(&self) -> Vec<&str> {
-    self.args[1..].iter().map(|s| s.as_str()).collect()
+  pub fn command_full(&self) -> String {
+    self.command().to_string() + " " + &self.command_args().join(" ")
   }
 }
 
-pub trait CharLocation {
-  fn line(&self) -> usize;
-  fn character(&self) -> usize;
-}
-
-impl CharLocation for ParsedComment {
-  fn line(&self) -> usize {
-    self.line
-  }
-
-  fn character(&self) -> usize {
-    self.character
-  }
-}
-
+/// Parses the comments in the given source code and returns a list of
+/// ParsedComment structs.
 pub fn parse_comments(content: &str) -> Vec<ParsedComment> {
   let mut cmds = vec![];
   let mut pos = 0;
@@ -78,7 +48,8 @@ pub fn parse_comments(content: &str) -> Vec<ParsedComment> {
         if content[backslash_end..].starts_with("\r\n") {
           end += 1;
         }
-        if is_space_byte(&content[end..end + 1]) {
+        let byte = content[end..end + 1].chars().next().unwrap();
+        if is_space_byte(byte) {
           end += 1;
         }
         last_char = '\0';
@@ -97,7 +68,7 @@ pub fn parse_comments(content: &str) -> Vec<ParsedComment> {
       if matches[0] == "-command" {
         if matches.len() >= 3 {
           alias = Some(matches[1].clone().to_string());
-          args = matches[2..].to_vec();
+          args = matches[2..].to_vec().map_with_mut(|s| String::from(s));
         }
       } else {
         args = matches;

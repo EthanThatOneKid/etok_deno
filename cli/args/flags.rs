@@ -1395,7 +1395,7 @@ that are common to multiple directives. For example:
 
   (...)
 
-  //deno:generate cat LICENSE
+  //deno:generate deno run ./generate_some_code.ts
 
 The -command directive may appear anywhere in the file, but it is usually placed at the
 top of the file, before any directives that use it.
@@ -1426,7 +1426,7 @@ will run generate in verbose mode and print the commands that it is running as i
     .arg(script_arg().required(true))
     .arg(
       Arg::new("files")
-        .about("Files to run")
+        .help("Files to run")
         .takes_value(true)
         .multiple_values(true)
         .multiple_occurrences(true)
@@ -1438,33 +1438,33 @@ will run generate in verbose mode and print the commands that it is running as i
         .short('n')
         .long("dry-run")
         .alias("dryrun")
-        .about("Print the commands that would be run without actually running them"),
+        .help("Print the commands that would be run without actually running them"),
     )
     .arg(
       Arg::new("verbose")
         .short('v')
         .long("verbose")
-        .about("Print the module specifier and directive text of each directive when running the corresponding generator"),
+        .help("Print the module specifier and directive text of each directive when running the corresponding generator"),
     )
     .arg(
       Arg::new("trace")
         .short('x')
         .long("trace")
-        .about("Print the commands as they are run"),
+        .help("Print the commands as they are run"),
     )
     .arg(
       Arg::new("run")
         .long("run")
         .takes_value(true)
         .value_hint(ValueHint::Other)
-        .about("A regular expression to select directives to run by matching against the directive text as-is"),
+        .help("A regular expression to select directives to run by matching against the directive text as-is"),
     )
     .arg(
       Arg::new("skip")
         .long("skip")
         .takes_value(true)
         .value_hint(ValueHint::Other)
-        .about("A regular expression to select directives to skip by matching against the directive text as-is"),
+        .help("A regular expression to select directives to skip by matching against the directive text as-is"),
     )
     .arg(no_config_arg())
     .arg(config_arg())
@@ -4190,10 +4190,10 @@ mod tests {
       Flags {
         subcommand: DenoSubcommand::Generate(GenerateFlags {
           source_file: "foo.ts".to_string(),
-          files: FileFlags {
+          files: Option(FileFlags {
             include: vec![],
             ignore: vec![],
-          },
+          }),
           run: Some("bar.ts".to_string()),
           skip: Some("baz.ts".to_string()),
           verbose: Some(true),

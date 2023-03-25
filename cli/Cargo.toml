@@ -107,6 +107,7 @@ typed-arena = "=2.0.1"
 uuid = { workspace = true, features = ["serde"] }
 walkdir = "=2.3.2"
 zstd.workspace = true
+glob = "0.3.1"
 
 [target.'cfg(windows)'.dependencies]
 fwdansi.workspace = true
